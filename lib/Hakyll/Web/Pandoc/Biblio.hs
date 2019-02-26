@@ -113,14 +113,38 @@ readPandocBiblio ropt csl biblio item = do
 
     return $ fmap (const pandoc') item
 
+
 --------------------------------------------------------------------------------
 pandocBiblioCompiler :: String -> String -> Compiler (Item String)
-pandocBiblioCompiler cslFileName bibFileName = do
+pandocBiblioCompiler = 
+    pandocBiblioCompilerWith defaultHakyllReaderOptions defaultHakyllWriterOptions
+
+
+--------------------------------------------------------------------------------
+pandocBiblioCompilerWith :: ReaderOptions -> WriterOptions
+                         -> String -> String 
+                         -> Compiler (Item String)
+pandocBiblioCompilerWith = pandocBiblioCompilerWithTransform id
+
+
+--------------------------------------------------------------------------------
+pandocBiblioCompilerWithTransform :: (Pandoc -> Pandoc)
+                                  -> ReaderOptions -> WriterOptions
+                                  -> String -> String 
+                                  -> Compiler (Item String)
+pandocBiblioCompilerWithTransform f = pandocBiblioCompilerWithTransformM (return . f)
+
+--------------------------------------------------------------------------------
+pandocBiblioCompilerWithTransformM :: (Pandoc -> Pandoc)
+                                   -> ReaderOptions -> WriterOptions 
+                                   -> String -> String
+                                   -> Compiler (Item String)
+pandocBiblioCompilerWithTransformM f ropt wopt cslFileName bibFileName = do
     csl <- load $ fromFilePath cslFileName
     bib <- load $ fromFilePath bibFileName
-    liftM writePandoc
-        (getResourceBody >>= readPandocBiblio ropt csl bib)
-    where ropt = defaultHakyllReaderOptions
+    writePandocWith wopt <$>
+        (traverse f =<< readPandocBiblio ropt' csl bib =<< getResourceBody)
+    where ropt' = ropt
             { -- The following option enables citation rendering
-              readerExtensions = enableExtension Ext_citations $ readerExtensions defaultHakyllReaderOptions
+              readerExtensions = enableExtension Ext_citations $ readerExtensions ropt
             }
